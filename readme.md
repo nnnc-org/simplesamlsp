@@ -4,6 +4,12 @@ A simple SAML Service Provider (SP) implementation in golang. This is a test app
 
 ## Usage
 
+First, you should generate a certificate to use with your test application. You can use OpenSSL to generate a self-signed certificate and private key:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout myservice.key -out myservice.cert -days 365 -nodes -subj "/CN=localhost"
+```
+
 ### Docker Compose (recommended)
 
 ```yaml
@@ -21,7 +27,7 @@ services:
       - SAML_KEY_FILE=/cert/myservice.key
       - SAML_IDP_METADATA_URL=https://idp.example.org/simplesaml/saml2/idp/metadata.php
       - APP_URL=http://localhost:8080/
-      - APP_NAME=Nebraska Cloud Testing Page
+      - APP_NAME=Testing Page
 ```
 
 ### Running Directly
