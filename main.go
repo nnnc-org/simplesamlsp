@@ -20,19 +20,44 @@ var tmpl = template.Must(template.New("attributes").Parse(`
 	<!DOCTYPE html>
 	<html>
 	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<title>{{.Name}}</title>
 		<style>
-			body { font-family: Arial, sans-serif; margin: 2rem; }
-			table { border-collapse: collapse; width: 50%; }
-			th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
-			th { background-color: #f0f0f0; }
+			body { font-family: Arial, sans-serif; margin: 2rem; text-align: center; }
+			.responsive-table {
+			  width: 100%;
+			  border-collapse: collapse;
+			  margin: 1em auto;
+			  max-width: 100%;
+			}
+			@media (min-width: 768px) {
+			  .responsive-table {
+			    width: 60%;
+			  }
+			}
+			.responsive-table th,
+			.responsive-table td {
+			  border: 1px solid #ddd;
+			  padding: 0.75em;
+			  text-align: left;
+			}
+			.responsive-table th {
+			  background-color: #f5f5f5;
+			  font-weight: bold;
+			}
+			@media (max-width: 767px) {
+			  .responsive-table-container {
+			    overflow-x: auto;
+			    -webkit-overflow-scrolling: touch;
+			  }
+			}
 		</style>
 	</head>
-	<body>
+	<body class="responsive-table-container">
 		<h1>{{.Name}}</h1>
 		<p>Welcome! This page displays some details about your Single Sign On connection.</p>
 		<h2>Session Details</h2>
-		<table>
+		<table class="responsive-table">
 			<tr>
 				<th>Claim</th>
 				<th>Value</th>
@@ -51,7 +76,7 @@ var tmpl = template.Must(template.New("attributes").Parse(`
 			</tr>
 		</table>
 		<h2>NameID Details</h2>
-		<table>
+		<table class="responsive-table">
 			<tr>
 				<th>Format</th>
 				<th>Value</th>
@@ -62,7 +87,7 @@ var tmpl = template.Must(template.New("attributes").Parse(`
 			</tr>
 		</table>
 		<h2>Attributes</h2>
-		<table>
+		<table class="responsive-table">
 			<tr>
 				<th>Attribute</th>
 				<th>Values</th>
