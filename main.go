@@ -76,18 +76,38 @@ var tmpl = template.Must(template.New("attributes").Parse(`
 				<td>{{.JWT.ExpiresAt}} ({{.JWT.JWTSessionClaims.ExpiresAt}})</td>
 			</tr>
 		</table>
-		<h2>NameID Details</h2>
+		<h2>SAML Details</h2>
 		<table class="responsive-table">
 			<tr>
-				<th>Format</th>
+				<th>Item</th>
 				<th>Value</th>
 			</tr>
 			<tr>
-				<td>{{.NameID.Format}}</td>
-				<td>{{.NameID.Value}}</td>
+				<td>NameID Value</td>
+				<td>{{.SamlInfo.NameidValue}}</td>
 			</tr>
+			<tr>
+				<td>NameID Format</td>
+				<td>{{.SamlInfo.NameidFormat}}</td>
+			</tr>
+			<tr>
+				<td>Session Index</td>
+				<td>{{.SamlInfo.SessionIndex}}</td>
+			</tr>
+			{{ if .SamlInfo.AuthnContextClassRef }}
+			<tr>
+				<td>Authn Context Class Ref</td>
+				<td>{{.SamlInfo.AuthnContextClassRef}}</td>
+			</tr>
+			{{ end }}
+			{{ if .SamlInfo.AuthenticatingAuthority }}
+			<tr>
+				<td>Authenticating Authority</td>
+				<td>{{.SamlInfo.AuthenticatingAuthority}}</td>
+			</tr>
+			{{ end }}
 		</table>
-		<h2>Attributes</h2>
+		<h2>SAML Attributes</h2>
 		<table class="responsive-table">
 			<tr>
 				<th>Attribute</th>
@@ -135,20 +155,14 @@ func (c JWTSessionCodec) New(assertion *saml.Assertion) (samlsp.Session, error) 
 	}
 
 	// Get AuthnContextClassRef and AuthenticatingAuthority from AuthnStatement
-	// can't complete until this is fixed in crewjam/saml - https://github.com/crewjam/saml/blob/346540312f721498fc75e69637d9250dd89f230b/schema.go#L1161
-	/*if len(assertion.AuthnStatements) > 0 {
+	if len(assertion.AuthnStatements) > 0 {
 		authnStatement := assertion.AuthnStatements[0]
 		authnContext := authnStatement.AuthnContext
 		if authnContextClassRef := authnContext.AuthnContextClassRef.Value; authnContextClassRef != "" {
 			jwtSession.Attributes["AuthnContextClassRef"] = []string{authnContextClassRef}
 		}
-		// print authncontext.Element() for debugging
-		log.Println("AuthnContext Element:", authnContext.Element())
-
-		//contextTree := authnContext.Element().ChildElements()
-		//log.Println(contextTree.SelectElement("saml:AuthenticatingAuthority"))
-		log.Println("AuthnContext Element:", len(assertion.AuthnStatements[0].))
-	}*/
+		// can't complete until this is fixed in crewjam/saml - https://github.com/crewjam/saml/blob/346540312f721498fc75e69637d9250dd89f230b/schema.go#L1161
+	}
 
 	return jwtSession, nil
 }
@@ -172,15 +186,18 @@ type attribute struct {
 	Values string
 }
 
-type nameID struct {
-	Value  string
-	Format string
+type samlDetails struct {
+	NameidValue             string
+	NameidFormat            string
+	SessionIndex            string
+	AuthnContextClassRef    string
+	AuthenticatingAuthority string
 }
 
 type templateData struct {
 	Name       string
 	JWT        JWTSessionClaimsWithDates `json:"-"`
-	NameID     nameID
+	SamlInfo   samlDetails
 	Attributes []attribute
 }
 
@@ -280,25 +297,28 @@ func main() {
 		attributes := customSession.GetAttributes()
 
 		// if nameid and nameidformat are in attributes, put them in the a nameid struct to pass to the template
-		nameidValue := ""
-		nameidFormat := ""
+		samlInfo := samlDetails{
+			NameidValue:             "",
+			NameidFormat:            "",
+			SessionIndex:            "",
+			AuthnContextClassRef:    "",
+			AuthenticatingAuthority: "",
+		}
 		if nameIDValues, ok := attributes["NameID"]; ok && len(nameIDValues) > 0 {
-			nameidValue = nameIDValues[0]
+			samlInfo.NameidValue = nameIDValues[0]
 			delete(attributes, "NameID")
 			if nameIDFormatValues, ok := attributes["NameIDFormat"]; ok && len(nameIDFormatValues) > 0 {
-				nameidFormat = nameIDFormatValues[0]
+				samlInfo.NameidFormat = nameIDFormatValues[0]
 				delete(attributes, "NameIDFormat")
 			}
 		}
-
-		// remove SessionIndex from attributes if it exists
 		if _, ok := attributes["SessionIndex"]; ok {
+			samlInfo.SessionIndex = attributes["SessionIndex"][0]
 			delete(attributes, "SessionIndex")
 		}
-
-		nameid := nameID{
-			Value:  nameidValue,
-			Format: nameidFormat,
+		if _, ok := attributes["AuthnContextClassRef"]; ok {
+			samlInfo.AuthnContextClassRef = attributes["AuthnContextClassRef"][0]
+			delete(attributes, "AuthnContextClassRef")
 		}
 
 		var rows []attribute
@@ -321,7 +341,7 @@ func main() {
 		var tdata = templateData{
 			Name:       appName,
 			JWT:        jwAttributeWithDates,
-			NameID:     nameid,
+			SamlInfo:   samlInfo,
 			Attributes: rows,
 		}
 
