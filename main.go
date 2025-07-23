@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
@@ -64,15 +65,15 @@ var tmpl = template.Must(template.New("attributes").Parse(`
 			</tr>
 			<tr>
 				<td>Subject (NameID)</td>
-				<td>{{.JWT.Subject}}</td>
+				<td>{{.JWT.JWTSessionClaims.Subject}}</td>
 			</tr>
 			<tr>
 				<td>Issued At</td>
-				<td>{{.JWT.IssuedAt}}</td>
+				<td>{{.JWT.IssuedAt}} ({{.JWT.JWTSessionClaims.IssuedAt}})</td>
 			</tr>
 			<tr>
 				<td>Expires At</td>
-				<td>{{.JWT.ExpiresAt}}</td>
+				<td>{{.JWT.ExpiresAt}} ({{.JWT.JWTSessionClaims.ExpiresAt}})</td>
 			</tr>
 		</table>
 		<h2>NameID Details</h2>
@@ -133,6 +134,22 @@ func (c JWTSessionCodec) New(assertion *saml.Assertion) (samlsp.Session, error) 
 		}
 	}
 
+	// Get AuthnContextClassRef and AuthenticatingAuthority from AuthnStatement
+	// can't complete until this is fixed in crewjam/saml - https://github.com/crewjam/saml/blob/346540312f721498fc75e69637d9250dd89f230b/schema.go#L1161
+	/*if len(assertion.AuthnStatements) > 0 {
+		authnStatement := assertion.AuthnStatements[0]
+		authnContext := authnStatement.AuthnContext
+		if authnContextClassRef := authnContext.AuthnContextClassRef.Value; authnContextClassRef != "" {
+			jwtSession.Attributes["AuthnContextClassRef"] = []string{authnContextClassRef}
+		}
+		// print authncontext.Element() for debugging
+		log.Println("AuthnContext Element:", authnContext.Element())
+
+		//contextTree := authnContext.Element().ChildElements()
+		//log.Println(contextTree.SelectElement("saml:AuthenticatingAuthority"))
+		log.Println("AuthnContext Element:", len(assertion.AuthnStatements[0].))
+	}*/
+
 	return jwtSession, nil
 }
 
@@ -142,6 +159,12 @@ func (c JWTSessionCodec) Encode(s samlsp.Session) (string, error) {
 
 func (c JWTSessionCodec) Decode(signed string) (samlsp.Session, error) {
 	return c.Inner.Decode(signed)
+}
+
+type JWTSessionClaimsWithDates struct {
+	samlsp.JWTSessionClaims
+	ExpiresAt string `json:"expires_at"`
+	IssuedAt  string `json:"issued_at"`
 }
 
 type attribute struct {
@@ -156,7 +179,7 @@ type nameID struct {
 
 type templateData struct {
 	Name       string
-	JWT        samlsp.JWTSessionClaims `json:"-"`
+	JWT        JWTSessionClaimsWithDates `json:"-"`
 	NameID     nameID
 	Attributes []attribute
 }
@@ -247,6 +270,13 @@ func main() {
 		// get the jwt information
 		jwtAttributes := session.(samlsp.JWTSessionClaims)
 
+		// convert expiresAt and issuedAt from int64 to date strings
+		jwAttributeWithDates := JWTSessionClaimsWithDates{
+			JWTSessionClaims: jwtAttributes,
+			ExpiresAt:        time.Unix(jwtAttributes.ExpiresAt, 0).Format("2006-01-02 15:04:05"),
+			IssuedAt:         time.Unix(jwtAttributes.IssuedAt, 0).Format("2006-01-02 15:04:05"),
+		}
+
 		attributes := customSession.GetAttributes()
 
 		// if nameid and nameidformat are in attributes, put them in the a nameid struct to pass to the template
@@ -259,6 +289,11 @@ func main() {
 				nameidFormat = nameIDFormatValues[0]
 				delete(attributes, "NameIDFormat")
 			}
+		}
+
+		// remove SessionIndex from attributes if it exists
+		if _, ok := attributes["SessionIndex"]; ok {
+			delete(attributes, "SessionIndex")
 		}
 
 		nameid := nameID{
@@ -285,7 +320,7 @@ func main() {
 
 		var tdata = templateData{
 			Name:       appName,
-			JWT:        jwtAttributes,
+			JWT:        jwAttributeWithDates,
 			NameID:     nameid,
 			Attributes: rows,
 		}
