@@ -28,6 +28,8 @@ services:
       - SAML_IDP_METADATA_URL=https://idp.example.org/simplesaml/saml2/idp/metadata.php
       - APP_URL=http://localhost:8080/
       - APP_NAME=Testing Page
+      # Optional - specify the SAML NameID format - default is unspecified
+      - SAML_NAMEID_FORMAT=urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress
 ```
 
 ### Running Directly

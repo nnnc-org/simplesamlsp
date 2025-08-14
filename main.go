@@ -211,6 +211,7 @@ func main() {
 	certFile := os.Getenv("SAML_CERT_FILE")
 	keyFile := os.Getenv("SAML_KEY_FILE")
 	appName := os.Getenv("APP_NAME")
+	nameidFormat := os.Getenv("SAML_NAMEID_FORMAT")
 
 	if idpURL == "" || appURL == "" {
 		log.Fatal("Missing required environment variables: SAML_ENTITY_ID, SAML_IDP_METADATA_URL, APP_URL")
@@ -266,6 +267,19 @@ func main() {
 	}
 
 	sp.Session = sessionProvider
+	sp.ServiceProvider.AuthnNameIDFormat = saml.UnspecifiedNameIDFormat
+	if nameidFormat != "" {
+		switch nameidFormat {
+		case "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress":
+			sp.ServiceProvider.AuthnNameIDFormat = saml.EmailAddressNameIDFormat
+		case "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent":
+			sp.ServiceProvider.AuthnNameIDFormat = saml.PersistentNameIDFormat
+		case "urn:oasis:names:tc:SAML:2.0:nameid-format:transient":
+			sp.ServiceProvider.AuthnNameIDFormat = saml.TransientNameIDFormat
+		default:
+			log.Println("Invalid SAML_NAMEID_FORMAT provided, using unspecified format")
+		}
+	}
 
 	// SAML ACS
 	http.Handle("/saml/", sp)
