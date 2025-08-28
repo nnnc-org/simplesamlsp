@@ -214,7 +214,7 @@ func main() {
 	nameidFormat := os.Getenv("SAML_NAMEID_FORMAT")
 
 	if idpURL == "" || appURL == "" {
-		log.Fatal("Missing required environment variables: SAML_ENTITY_ID, SAML_IDP_METADATA_URL, APP_URL")
+		log.Fatal("Missing required environment variables: SAML_IDP_METADATA_URL, APP_URL")
 	}
 
 	var signingCert *tls.Certificate
@@ -230,6 +230,11 @@ func main() {
 		log.Println("No signing cert/key provided. Running in unsigned mode (not recommended for production).")
 	}
 
+	// make sure appURL ends with a slash
+	if !strings.HasSuffix(appURL, "/") {
+		appURL += "/"
+	}
+
 	rootURL := mustParseURL(appURL)
 
 	idpMetadataURL, err := url.Parse(idpURL)
@@ -237,6 +242,9 @@ func main() {
 		panic(err) // TODO handle error
 	}
 	idpMetadata, err := samlsp.FetchMetadata(context.Background(), http.DefaultClient, *idpMetadataURL)
+	if err != nil {
+		log.Fatalf("Error fetching IDP metadata: %v", err)
+	}
 
 	opts := samlsp.Options{
 		URL:         *rootURL,
@@ -247,6 +255,9 @@ func main() {
 
 	if entityID != "" {
 		opts.EntityID = entityID
+	} else {
+		opts.EntityID = rootURL.String() + "saml/metadata"
+		log.Printf("No SAML_ENTITY_ID provided, using APP_URL as EntityID: %s", opts.EntityID)
 	}
 
 	if signingCert != nil {
