@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
@@ -231,6 +232,28 @@ func main() {
 
 	if idpURL == "" || appURL == "" {
 		log.Fatal("Missing required environment variables: SAML_IDP_METADATA_URL, APP_URL")
+	}
+
+	// Check if idpURL is a valid URL
+	if _, err := url.ParseRequestURI(idpURL); err != nil {
+		log.Fatalf("Invalid SAML_IDP_METADATA_URL: %v", err)
+	}
+
+	// check if idpURL is currently working, if not, wait for it to be available
+	for ok := false; !ok; {
+		resp, err := http.Get(idpURL)
+		if err != nil {
+			log.Printf("Waiting for SAML_IDP_METADATA_URL to be reachable: %v", err)
+		} else if resp.StatusCode != 200 {
+			log.Printf("Waiting for SAML_IDP_METADATA_URL to be reachable: status code %d", resp.StatusCode)
+		} else {
+			ok = true
+		}
+		if !ok {
+			log.Println("Retrying in 30 seconds...")
+			// wait for 5 seconds before retrying
+			time.Sleep(30 * time.Second)
+		}
 	}
 
 	var signingCert *tls.Certificate
