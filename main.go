@@ -11,7 +11,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
@@ -161,7 +160,9 @@ func (c JWTSessionCodec) New(assertion *saml.Assertion) (samlsp.Session, error) 
 		if authnContextClassRef := authnContext.AuthnContextClassRef.Value; authnContextClassRef != "" {
 			jwtSession.Attributes["AuthnContextClassRef"] = []string{authnContextClassRef}
 		}
-		// can't complete until this is fixed in crewjam/saml - https://github.com/crewjam/saml/blob/346540312f721498fc75e69637d9250dd89f230b/schema.go#L1161
+		if len(authnContext.AuthenticatingAuthorities) > 0 {
+			jwtSession.Attributes["AuthenticatingAuthority"] = []string{authnContext.AuthenticatingAuthorities[0].Value}
+		}
 	}
 
 	return jwtSession, nil
@@ -173,6 +174,21 @@ func (c JWTSessionCodec) Encode(s samlsp.Session) (string, error) {
 
 func (c JWTSessionCodec) Decode(signed string) (samlsp.Session, error) {
 	return c.Inner.Decode(signed)
+}
+
+// Custom AssertionHandler to log the assertion
+type LoggingAssertionHandler struct{}
+
+func (h LoggingAssertionHandler) HandleAssertion(assertion *saml.Assertion) error {
+	log.Printf("Received SAML Assertion for Subject: %s", assertion.Subject.NameID.Value)
+	/*for _, attrStatement := range assertion.AttributeStatements {
+		for _, attr := range attrStatement.Attributes {
+			log.Printf("  Attribute: %s = %v", attr.Name, attr.Values)
+		}
+	}*/
+	// print the entire assertion for debugging (optional, can be very verbose)
+	//log.Printf("Full Assertion: %+v", assertion)
+	return nil
 }
 
 type JWTSessionClaimsWithDates struct {
@@ -277,6 +293,9 @@ func main() {
 		Inner: codec,
 	}
 
+	// Add custom AssertionHandler to log assertions
+	sp.AssertionHandler = LoggingAssertionHandler{}
+
 	sp.Session = sessionProvider
 	sp.ServiceProvider.AuthnNameIDFormat = saml.UnspecifiedNameIDFormat
 	if nameidFormat != "" {
@@ -315,8 +334,8 @@ func main() {
 		// convert expiresAt and issuedAt from int64 to date strings
 		jwAttributeWithDates := JWTSessionClaimsWithDates{
 			JWTSessionClaims: jwtAttributes,
-			ExpiresAt:        time.Unix(jwtAttributes.ExpiresAt, 0).Format("2006-01-02 15:04:05"),
-			IssuedAt:         time.Unix(jwtAttributes.IssuedAt, 0).Format("2006-01-02 15:04:05"),
+			ExpiresAt:        jwtAttributes.ExpiresAt.Format("2006-01-02 15:04:05"),
+			IssuedAt:         jwtAttributes.IssuedAt.Format("2006-01-02 15:04:05"),
 		}
 
 		attributes := customSession.GetAttributes()
@@ -344,6 +363,10 @@ func main() {
 		if _, ok := attributes["AuthnContextClassRef"]; ok {
 			samlInfo.AuthnContextClassRef = attributes["AuthnContextClassRef"][0]
 			delete(attributes, "AuthnContextClassRef")
+		}
+		if _, ok := attributes["AuthenticatingAuthority"]; ok {
+			samlInfo.AuthenticatingAuthority = attributes["AuthenticatingAuthority"][0]
+			delete(attributes, "AuthenticatingAuthority")
 		}
 
 		var rows []attribute
