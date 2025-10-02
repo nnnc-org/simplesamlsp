@@ -274,7 +274,10 @@ func main() {
 		appURL += "/"
 	}
 
-	rootURL := mustParseURL(appURL)
+	rootURL, err := url.Parse(appURL)
+	if err != nil {
+		log.Fatalf("invalid APP_URL: %v", err)
+	}
 
 	idpMetadataURL, err := url.Parse(idpURL)
 	if err != nil {
@@ -446,15 +449,6 @@ func main() {
 }
 
 // Helpers
-
-func mustParseURL(raw string) *url.URL {
-	u, err := url.Parse(raw)
-	if err != nil {
-		log.Fatalf("invalid APP_URL: %v", err)
-	}
-	return u
-}
-
 func proxyHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
